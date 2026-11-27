@@ -74,7 +74,7 @@ func TestKeysetCacheIsBounded(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < maxCachedKeysets; i++ {
-				c.store(strconv.Itoa(w)+"-"+strconv.Itoa(i), i)
+				c.store(strconv.Itoa(w)+"-"+strconv.Itoa(i), i, 0)
 			}
 		}(w)
 	}
@@ -82,7 +82,7 @@ func TestKeysetCacheIsBounded(t *testing.T) {
 	if n := c.len(); n > maxCachedKeysets {
 		t.Fatalf("cache grew to %d entries", n)
 	}
-	c.store(strings.Repeat("x", maxCachedKeysetBytes+1), 1)
+	c.store(strings.Repeat("x", maxCachedKeysetBytes+1), 1, 0)
 	if c.bytes > maxCachedKeysetBytes {
 		t.Fatalf("cache holds %d bytes", c.bytes)
 	}
@@ -103,5 +103,29 @@ func TestResetPrimitiveCaches(t *testing.T) {
 	}
 	if _, ok := validKeysets.load(ks); ok {
 		t.Fatal("validation cache not cleared")
+	}
+}
+
+func TestKeysetCacheByteBudget(t *testing.T) {
+	var c keysetCache
+	big := maxCachedKeysetBytes / 4
+	for i := 0; i < 4; i++ {
+		c.store(strconv.Itoa(i)+strings.Repeat("x", big), i, 0)
+		if c.bytes > maxCachedKeysetBytes {
+			t.Fatalf("cache holds %d bytes after %d inserts", c.bytes, i+1)
+		}
+	}
+	if n := c.len(); n != 1 {
+		t.Fatalf("expected the fourth keyset to evict the rest, got %d entries", n)
+	}
+}
+
+func TestStoreAfterResetIsDropped(t *testing.T) {
+	var c keysetCache
+	gen := c.generation()
+	c.reset()
+	c.store("deleted", 1, gen)
+	if _, ok := c.load("deleted"); ok {
+		t.Fatal("stale store repopulated a reset cache")
 	}
 }

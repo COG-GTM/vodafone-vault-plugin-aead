@@ -19,6 +19,13 @@ type keysetCache struct {
 	mu    sync.RWMutex
 	m     map[string]interface{}
 	bytes int
+	gen   uint64
+}
+
+func (c *keysetCache) generation() uint64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.gen
 }
 
 func (c *keysetCache) load(rawKeyset string) (interface{}, bool) {
@@ -28,12 +35,17 @@ func (c *keysetCache) load(rawKeyset string) (interface{}, bool) {
 	return v, ok
 }
 
-func (c *keysetCache) store(rawKeyset string, v interface{}) {
+// store drops v if the cache was reset after gen was read, so a request that
+// overlaps a config change cannot re-insert a deleted keyset.
+func (c *keysetCache) store(rawKeyset string, v interface{}, gen uint64) {
 	if len(rawKeyset) > maxCachedKeysetBytes {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if gen != c.gen {
+		return
+	}
 	if _, ok := c.m[rawKeyset]; ok {
 		return
 	}
@@ -50,6 +62,7 @@ func (c *keysetCache) reset() {
 	defer c.mu.Unlock()
 	c.m = nil
 	c.bytes = 0
+	c.gen++
 }
 
 func (c *keysetCache) len() int {
@@ -75,10 +88,11 @@ func isValidKeySetJsonCached(keySetJson string) bool {
 	if _, ok := validKeysets.load(keySetJson); ok {
 		return true
 	}
+	gen := validKeysets.generation()
 	if _, err := ValidateKeySetJson(keySetJson); err != nil {
 		return false
 	}
-	validKeysets.store(keySetJson, struct{}{})
+	validKeysets.store(keySetJson, struct{}{}, gen)
 	return true
 }
 
@@ -87,9 +101,10 @@ func GetCachedAead(rawKeyset string) (tink.AEAD, error) {
 	if v, ok := aeadCache.load(rawKeyset); ok {
 		return v.(tink.AEAD), nil
 	}
+	gen := aeadCache.generation()
 	_, a, err := CreateInsecureHandleAndAead(rawKeyset)
 	if err == nil && a != nil {
-		aeadCache.store(rawKeyset, a)
+		aeadCache.store(rawKeyset, a, gen)
 	}
 	return a, err
 }
@@ -99,9 +114,10 @@ func GetCachedDeterministicAead(rawKeyset string) (tink.DeterministicAEAD, error
 	if v, ok := daeadCache.load(rawKeyset); ok {
 		return v.(tink.DeterministicAEAD), nil
 	}
+	gen := daeadCache.generation()
 	_, d, err := CreateInsecureHandleAndDeterministicAead(rawKeyset)
 	if err == nil && d != nil {
-		daeadCache.store(rawKeyset, d)
+		daeadCache.store(rawKeyset, d, gen)
 	}
 	return d, err
 }
