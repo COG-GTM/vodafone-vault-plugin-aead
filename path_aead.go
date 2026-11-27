@@ -181,7 +181,7 @@ func (b *backend) doEncryptionChan(fieldName string, unencryptedData interface{}
 		if deterministic {
 			// SUPPORT FOR DETERMINISTIC AEAD
 			// we don't need the key handle which is returned first
-			_, tinkDetAead, err := aeadutils.CreateInsecureHandleAndDeterministicAead(encryptionKeyStr)
+			tinkDetAead, err := aeadutils.GetCachedDeterministicAead(encryptionKeyStr)
 			if err != nil {
 				hclog.L().Error("Failed to create a keyhandle", err)
 			}
@@ -198,7 +198,7 @@ func (b *backend) doEncryptionChan(fieldName string, unencryptedData interface{}
 			resp[fieldName] = b64.StdEncoding.EncodeToString(cypherText)
 		} else {
 			// SUPPORT FOR NON DETERMINISTIC AEAD
-			_, tinkAead, err := aeadutils.CreateInsecureHandleAndAead(encryptionKeyStr)
+			tinkAead, err := aeadutils.GetCachedAead(encryptionKeyStr)
 			if err != nil {
 				hclog.L().Error("Failed to create a keyhandle", err)
 			}
@@ -327,7 +327,7 @@ func (b *backend) doDecryptionChan(fieldName string, encryptedDataBase64 interfa
 		if deterministic {
 			// SUPPORT FOR DETERMINISTIC AEAD
 			// we don't need the key handle which is returned first
-			_, tinkDetAead, err := aeadutils.CreateInsecureHandleAndDeterministicAead(encryptionKeyStr)
+			tinkDetAead, err := aeadutils.GetCachedDeterministicAead(encryptionKeyStr)
 			if err != nil {
 				hclog.L().Error("Failed to create a  key handle", err)
 			}
@@ -344,7 +344,7 @@ func (b *backend) doDecryptionChan(fieldName string, encryptedDataBase64 interfa
 			resp[fieldName] = string(plainText)
 		} else {
 			// SUPPORT FOR NON DETERMINISTIC AEAD
-			_, tinkAead, err := aeadutils.CreateInsecureHandleAndAead(encryptionKeyStr)
+			tinkAead, err := aeadutils.GetCachedAead(encryptionKeyStr)
 			if err != nil {
 				hclog.L().Error("Failed to create tinkAead", err)
 			}
@@ -484,7 +484,7 @@ func (b *backend) encryptCol(ctx context.Context, req *logical.Request, data *fr
 	if keyFound && deterministic {
 		// SUPPORT FOR DETERMINISTIC AEAD
 		// we don't need the key handle which is returned first
-		_, tinkDetAead, err = aeadutils.CreateInsecureHandleAndDeterministicAead(encryptionKeyStr)
+		tinkDetAead, err = aeadutils.GetCachedDeterministicAead(encryptionKeyStr)
 		if err != nil {
 			hclog.L().Error("Failed to create a keyhandle", err)
 			return &logical.Response{
@@ -493,7 +493,7 @@ func (b *backend) encryptCol(ctx context.Context, req *logical.Request, data *fr
 		}
 	} else if keyFound && !deterministic {
 		// SUPPORT FOR NON DETERMINISTIC AEAD
-		_, tinkAead, err = aeadutils.CreateInsecureHandleAndAead(encryptionKeyStr)
+		tinkAead, err = aeadutils.GetCachedAead(encryptionKeyStr)
 		if err != nil {
 			hclog.L().Error("Failed to create a key", err)
 			return &logical.Response{
@@ -659,7 +659,7 @@ func (b *backend) decryptCol(ctx context.Context, req *logical.Request, data *fr
 	if keyFound && deterministic {
 		// SUPPORT FOR DETERMINISTIC AEAD
 		// we don't need the key handle which is returned first
-		_, tinkDetAead, err = aeadutils.CreateInsecureHandleAndDeterministicAead(encryptionKeyStr)
+		tinkDetAead, err = aeadutils.GetCachedDeterministicAead(encryptionKeyStr)
 		if err != nil {
 			hclog.L().Error("Failed to create a key handle", err)
 			return &logical.Response{
@@ -668,7 +668,7 @@ func (b *backend) decryptCol(ctx context.Context, req *logical.Request, data *fr
 		}
 	} else if keyFound && !deterministic {
 		// SUPPORT FOR NON DETERMINISTIC AEAD
-		_, tinkAead, err = aeadutils.CreateInsecureHandleAndAead(encryptionKeyStr)
+		tinkAead, err = aeadutils.GetCachedAead(encryptionKeyStr)
 		if err != nil {
 			hclog.L().Error("Failed to create a key handle", err)
 			return &logical.Response{

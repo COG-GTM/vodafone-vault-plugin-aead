@@ -488,8 +488,7 @@ func GetEncryptionKey(fieldName string, AEAD_CONFIG cmap.ConcurrentMap, setDepth
 		configValue, ok := AEAD_CONFIG.Get(fieldName)
 		if ok {
 			configValueStr := configValue.(string)
-			_, err := ValidateKeySetJson(configValueStr)
-			if err == nil {
+			if isValidKeySetJsonCached(configValueStr) {
 				// this is a valid key
 				return configValue, true
 			} else {
