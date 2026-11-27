@@ -3,6 +3,7 @@ package aeadplugin
 import (
 	"context"
 	"fmt"
+	"github.com/Vodafone/vault-plugin-aead/aeadutils"
 	"os"
 	"sort"
 	"sync"
@@ -516,6 +517,7 @@ func (b *backend) invalidate(ctx context.Context, key string) {
 	if key == "config" {
 		b.Logger().Warn("🔴 CACHE INVALIDATED - InvalidateKey callback fired", "key", key)
 		b.cacheValid.Store(false)
+		aeadutils.ResetPrimitiveCaches()
 	}
 }
 

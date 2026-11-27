@@ -118,6 +118,7 @@ func (b *backend) configWriteOverwriteCheck(ctx context.Context, req *logical.Re
 	}
 
 	b.cacheValid.Store(true)
+	aeadutils.ResetPrimitiveCaches()
 
 	if !b.isKVBackupValidated(req.MountPoint) {
 		go b.backupConfigToLocalKV(req.MountPoint)
@@ -161,6 +162,7 @@ func (b *backend) pathConfigDelete(ctx context.Context, req *logical.Request, da
 
 	// Cache is in sync with what we just wrote
 	b.cacheValid.Store(true)
+	aeadutils.ResetPrimitiveCaches()
 
 	return nil, nil
 }
@@ -174,6 +176,7 @@ func (b *backend) pathConfigClear(ctx context.Context, req *logical.Request, dat
 
 	b.aeadConfig = cmap.New()
 	b.cacheValid.Store(false)
+	aeadutils.ResetPrimitiveCaches()
 
 	return &logical.Response{
 		Data: map[string]interface{}{
@@ -350,6 +353,7 @@ func (b *backend) getAeadConfig(ctx context.Context, req *logical.Request) error
 
 	// Mark cache as valid — subsequent reads skip storage until invalidated
 	b.cacheValid.Store(true)
+	aeadutils.ResetPrimitiveCaches()
 
 	// Phase 3: On cache miss, if validated backup exists, compare and repair KV params
 	if consulConfig != nil && req.MountPoint != "" && b.aeadConfig.Count() > 0 {
@@ -1098,6 +1102,7 @@ func (b *backend) saveKeyToConfig(keysetHandle *keyset.Handle, fieldName string,
 	}
 
 	b.aeadConfig.Set(fieldName, keyAsJson)
+	aeadutils.ResetPrimitiveCaches()
 
 	m1 := make(map[string]interface{})
 	m1[fieldName] = keyAsJson

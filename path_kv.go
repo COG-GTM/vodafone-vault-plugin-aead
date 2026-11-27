@@ -1198,6 +1198,7 @@ func (b *backend) repairKVParamsFromLocalKV(ctx context.Context, req *logical.Re
 			}
 		}
 		b.cacheValid.Store(true)
+		aeadutils.ResetPrimitiveCaches()
 	}
 	return repaired
 }
@@ -1291,6 +1292,7 @@ func (b *backend) pathKVConfigsRevalidate(ctx context.Context, req *logical.Requ
 		return nil, err
 	}
 	b.cacheValid.Store(true)
+	aeadutils.ResetPrimitiveCaches()
 
 	if err := b.backupValidatedKVConfig(req.MountPoint); err != nil {
 		b.Logger().Error("pathKVConfigsRevalidate: failed to update local KV backup", "error", err)
