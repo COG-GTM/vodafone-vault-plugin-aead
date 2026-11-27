@@ -2,35 +2,60 @@ package aeadutils
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/google/tink/go/tink"
 )
 
 // Tink primitives are safe for concurrent use. Entries are keyed by the full
 // keyset JSON, so a rotated or replaced keyset is simply a new entry.
-const maxCachedKeysets = 1024
+// ResetPrimitiveCaches is called whenever the config changes so that deleted
+// or replaced keysets do not stay resident.
+const (
+	maxCachedKeysets     = 1024
+	maxCachedKeysetBytes = 8 << 20
+)
 
 type keysetCache struct {
-	m     sync.Map
-	count atomic.Int64
+	mu    sync.RWMutex
+	m     map[string]interface{}
+	bytes int
 }
 
 func (c *keysetCache) load(rawKeyset string) (interface{}, bool) {
-	return c.m.Load(rawKeyset)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.m[rawKeyset]
+	return v, ok
 }
 
 func (c *keysetCache) store(rawKeyset string, v interface{}) {
-	if c.count.Load() >= maxCachedKeysets {
-		c.m.Range(func(k, _ interface{}) bool {
-			c.m.Delete(k)
-			return true
-		})
-		c.count.Store(0)
+	if len(rawKeyset) > maxCachedKeysetBytes {
+		return
 	}
-	if _, loaded := c.m.LoadOrStore(rawKeyset, v); !loaded {
-		c.count.Add(1)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.m[rawKeyset]; ok {
+		return
 	}
+	if c.m == nil || len(c.m) >= maxCachedKeysets || c.bytes+len(rawKeyset) > maxCachedKeysetBytes {
+		c.m = make(map[string]interface{})
+		c.bytes = 0
+	}
+	c.m[rawKeyset] = v
+	c.bytes += len(rawKeyset)
+}
+
+func (c *keysetCache) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.m = nil
+	c.bytes = 0
+}
+
+func (c *keysetCache) len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.m)
 }
 
 var (
@@ -38,6 +63,13 @@ var (
 	aeadCache    keysetCache
 	daeadCache   keysetCache
 )
+
+// ResetPrimitiveCaches drops every cached keyset and primitive.
+func ResetPrimitiveCaches() {
+	validKeysets.reset()
+	aeadCache.reset()
+	daeadCache.reset()
+}
 
 func isValidKeySetJsonCached(keySetJson string) bool {
 	if _, ok := validKeysets.load(keySetJson); ok {

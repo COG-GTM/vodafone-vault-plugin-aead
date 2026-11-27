@@ -2,6 +2,9 @@ package aeadutils
 
 import (
 	"bytes"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/tink/go/aead"
@@ -65,10 +68,40 @@ func TestCachedAeadRoundTripsWithUncached(t *testing.T) {
 
 func TestKeysetCacheIsBounded(t *testing.T) {
 	var c keysetCache
-	for i := 0; i < maxCachedKeysets+10; i++ {
-		c.store(string(rune(i+1)), i)
+	var wg sync.WaitGroup
+	for w := 0; w < 8; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < maxCachedKeysets; i++ {
+				c.store(strconv.Itoa(w)+"-"+strconv.Itoa(i), i)
+			}
+		}(w)
 	}
-	if n := c.count.Load(); n > maxCachedKeysets {
+	wg.Wait()
+	if n := c.len(); n > maxCachedKeysets {
 		t.Fatalf("cache grew to %d entries", n)
+	}
+	c.store(strings.Repeat("x", maxCachedKeysetBytes+1), 1)
+	if c.bytes > maxCachedKeysetBytes {
+		t.Fatalf("cache holds %d bytes", c.bytes)
+	}
+}
+
+func TestResetPrimitiveCaches(t *testing.T) {
+	h, err := keyset.NewHandle(aead.AES256GCMKeyTemplate())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ks := keysetJSON(t, h)
+	if _, err := GetCachedAead(ks); err != nil || !isValidKeySetJsonCached(ks) {
+		t.Fatal("expected keyset to be cached")
+	}
+	ResetPrimitiveCaches()
+	if _, ok := aeadCache.load(ks); ok {
+		t.Fatal("aead cache not cleared")
+	}
+	if _, ok := validKeysets.load(ks); ok {
+		t.Fatal("validation cache not cleared")
 	}
 }
